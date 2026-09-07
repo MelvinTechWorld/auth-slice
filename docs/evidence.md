@@ -22,6 +22,10 @@ them in the order the brief lists them so a reviewer can follow along.
 | 01 | `01-signup-curl-failure.txt` | Output from curl hitting signup with invalid data. | Signup validation blocks bad requests and bypasses UI. | 2026-09-05 |
 | 02 | `02-signup-curl-success.txt` | Output from curl hitting signup with valid data. | Signup accepts good requests and returns success. | 2026-09-05 |
 | 03 | `03-users-table-hash.png` | Screenshot of the users table showing Alice's row. | Proves password is securely hashed and no plaintext password column exists. | 2026-09-05 |
+| 04 | `04-verify-expired-code.txt` | Output from curl hitting verify with expired code. | Verify endpoint strictly enforces TTL. | 2026-09-06 |
+| 05 | `05-verify-success.txt` | Output from curl hitting verify with fresh code. | Verify creates session with strict cookie flags. | 2026-09-06 |
+| 06 | `06-sessions-table.png` | Screenshot of the sessions table showing Alice's new session. | Proves session was stored in DB. | 2026-09-06 |
+| 07 | `07-verify-malformed.txt` | Output from curl hitting verify with malformed code. | Shared Zod schema works on the server. | 2026-09-06 |
 
 ---
 
@@ -57,6 +61,53 @@ curl -X POST http://localhost:3000/api/auth/signup \
 
 # What this proves:
 # The signup endpoint accepts valid inputs and processes them successfully to create an account.
+```
+
+---
+
+### Verify Endpoint (Expired Case)
+
+```bash
+# Command:
+curl -i -X POST http://localhost:3000/api/auth/verify \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "code": "123456"}'
+
+# Response:
+# HTTP 400 Bad Request with error: "Verification code has expired"
+
+# What this proves:
+# Server strictly enforces the verification code TTL.
+```
+
+### Verify Endpoint (Malformed Case)
+
+```bash
+# Command:
+curl -i -X POST http://localhost:3000/api/auth/verify \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "code": "abc"}'
+
+# Response:
+# HTTP 400 Bad Request with Zod validation error: "must be exactly 6 digits"
+
+# What this proves:
+# Shared Zod schema validation is properly enforced on the server.
+```
+
+### Verify Endpoint (Success Case)
+
+```bash
+# Command:
+curl -i -X POST http://localhost:3000/api/auth/verify \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "code": "123456"}'
+
+# Response:
+# HTTP 200 OK with Set-Cookie: sessionId=...; HttpOnly; Path=/; SameSite=Lax
+
+# What this proves:
+# Verify endpoint accepts a valid code and correctly sets a secure, HttpOnly, DB-backed session cookie.
 ```
 
 ---
