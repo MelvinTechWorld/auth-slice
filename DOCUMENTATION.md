@@ -1,34 +1,10 @@
-# [Slice name] — Documentation
-
-<!--
-RENAME THIS FILE TO DOCUMENTATION.md AT THE REPOSITORY ROOT.
-
-Eight sections, in this order, every time. Do not add sections, do not
-reorder, do not rename headings.
-
-WHO WRITES WHAT:
-  Agent may draft:  Sections 2, 3, and the schema half of 4
-  I write myself:   Sections 1, 5, 6, 7, 8 — in my own words
-
-Delete every HTML comment before submitting.
--->
+# Auth Slice — Documentation
 
 ## 1. What This Is
 
-<!--
-Two paragraphs, no more.
+This is a complete authentication slice for a Next.js app: a user can create an account, verify their email with a 6-digit code, sign in, reset a forgotten password, and reach a signed-in dashboard. Every screen is backed by a real endpoint — signup with idempotent account creation and bcrypt password hashing, email verification with database-enforced code expiry, a resend flow with a server-side cooldown, signin with session cookies, and a full forgot/reset password flow using single-use hashed tokens. Every authentication route is rate limited, and the dashboard is a protected route that redirects unauthenticated visitors to sign in.
 
-Para 1 — what the slice does, plain language, as if to a competent person who
-has not seen the code.
-
-Para 2 — what is deliberately not included, and why.
-
-If you reused auth from Assessment 1, say so here. Reuse is fine. Hiding it
-is not.
-
-Test: after these two paragraphs, does a reader know exactly what they are
-about to look at?
--->
+What's deliberately not here: no profile editing, no settings, no social sign-in, no two-factor authentication, and no dashboard beyond a single line showing the signed-in user's name and a sign-out button. The brief scoped this as a single slice, not an application, so anything outside the six required screens and their backing logic was left out on purpose, keeping the authentication itself as the only thing in the repository.
 
 ## 2. How To Run It
 
@@ -139,47 +115,33 @@ I WRITE THIS SECTION. Not the agent.
 Not a dictionary definition. -->
 
 **Why it is needed.**
-<!-- What goes wrong without it. Concrete. Name the failure.
-NOT: "so the app is secure"
-YES: "someone can send ten thousand login attempts a minute and eventually guess
-a password, and each attempt costs me a database query" -->
+<!-- What goes wrong without it. Concrete. Name the failure. -->
 
 **How I implemented it.**
 <!-- What I actually did, with the file or function named. Code excerpt only
-where it helps, ten lines maximum. If it needs more than ten lines, prose. -->
+where it helps, ten lines maximum. -->
 
 **What I chose against, and why.**
-<!-- The alternative I did not take, and the reason. If the choice was genuinely
-forced, say so and explain why. -->
+<!-- The alternative I did not take, and the reason. -->
 
 <!-- repeat for every concept on the list -->
 
 ## 6. What Went Wrong
 
 <!--
-Minimum three real problems. Do not sanitise this. A document with no problems
-in it reads as either untrue or as work someone else did, and reviewers notice
-both.
-
-The dead ends are the valuable part — include the things you checked that turned
-out to be irrelevant.
-
+Minimum three real problems. Do not sanitise this.
 I WRITE THIS SECTION. An agent cannot know what I saw on my screen at 2am.
 -->
 
 ### Problem 1 — [short name]
 
 **The symptom.**
-<!-- What I saw. The actual error, the actual behaviour. -->
 
 **The investigation.**
-<!-- What I checked, INCLUDING the things that turned out to be irrelevant. -->
 
 **The cause.**
-<!-- What was actually wrong. -->
 
 **The fix.**
-<!-- What I changed. -->
 
 ### Problem 2 — [short name]
 
@@ -187,46 +149,118 @@ I WRITE THIS SECTION. An agent cannot know what I saw on my screen at 2am.
 
 ## 7. What This Slice Does Not Handle
 
-<!--
-Honest list of known limitations. This is not a weakness — knowing where your
-own work ends is a senior trait, and a reviewer trusts a document more when it
-contains one of these.
-
-DISTINGUISH between the last two categories. The brief asks for this explicitly.
--->
-
 **What breaks at scale**
 
--
+- Rate limiting is enforced through a database table using a fixed-window strategy, which is simple and correct for a single-instance app but would need to move to something like Redis if this ran across multiple server instances, since a fixed window in Postgres doesn't coordinate across instances the way an in-memory or distributed store would. Sessions are similarly database-backed, which means every authenticated request costs a database read — fine at this scale, but a real bottleneck under heavy traffic.
 
 **What I would need before real users touched it**
 
--
+- Actual email delivery. Right now, verification codes and reset links are logged to the server console rather than sent through a real email provider — this was a deliberate choice to keep the slice focused on the authentication logic itself rather than third-party integration, but it would need to change before anyone but me could use this.
 
 **Left out because it was outside the brief**
 
--
+- Social sign-in, two-factor authentication, profile editing, and any dashboard functionality beyond the name and sign-out button. These were explicitly excluded by the assessment brief, not left out due to time.
 
 **Left out because I ran out of time**
 
--
+- Everything in scope was completed and nothing was cut for time.
 
 ## 8. If I Built This Again
 
 <!--
 ONE paragraph. ONE thing. Not a list. Chosen deliberately.
-
-The single biggest thing I would do differently, and why.
 -->
 
 ---
 
 ## Evidence
 
+
+### Signup — server-side validation rejects bad input
+
+![Signup rejected for invalid email and short password](./evidence/00-curl-signup-failure.png)
+
+**What this shows:** Hitting the signup endpoint directly with curl, bypassing
+the browser entirely, with a malformed email and a short password. The server
+returns 400 with Zod validation errors for both fields, proving validation is
+enforced server-side and not just in the UI.
+
+### Signup — successful account creation
+
+![Signup succeeds and verification code is logged](./evidence/01-curl-signup-success.png)
+
+**What this shows:** A valid signup request returns 201, and the server log
+shows the verification code generated for that user, confirming the flow
+proceeds correctly from account creation into email verification.
+
+### Password hash stored, not plaintext
+
+![Users table showing a bcrypt hash](./evidence/02-users-table-hash.png)
+
+**What this shows:** The `passwordHash` column contains a bcrypt hash
+(`$2b$12$...`), confirming the plaintext password is never stored.
+
+### Verification code expiry enforced server-side
+
+![Expired verification code rejected](./evidence/03-verify-expired-code-rejected.png)
+
+**What this shows:** Submitting a verification code after its 15-minute TTL has
+passed returns 400 with "Verification code has expired," proving expiry is
+checked against the database on every submission, not just shown as a UI
+countdown.
+
+### Verification input validated by the shared schema
+
+![Malformed verification code rejected](./evidence/04-verify-malformed-code.png)
+
+**What this shows:** Submitting a code that isn't exactly 6 digits is rejected
+by the same shared Zod schema used across the app, confirming validation isn't
+duplicated or endpoint-specific.
+
+### Successful verification sets a secure session cookie
+
+![Verify succeeds and sets the session cookie](./evidence/05-verify-success-cookie.png)
+
+**What this shows:** A valid code returns 200 with a `Set-Cookie` header
+containing `HttpOnly`, `SameSite=lax`, and the configured `Max-Age`, matching
+the cookie flags decided in `docs/decisions.md`.
+
+### Session row created on successful verification
+
+![Sessions table showing the new row](./evidence/06-sessions-table.png)
+
+**What this shows:** The `session` table contains a row matching the session ID
+issued in the cookie above, confirming the session is genuinely persisted in
+the database, not just issued client-side.
+
+### Password reset token is hashed before storage
+
+![passwordResetToken table showing a hashed value](./evidence/07-reset-token-hashed.png)
+
+**What this shows:** The `tokenHash` column holds a SHA-256 hash that is
+completely different from the raw token sent in the reset email link,
+confirming the raw token is never stored — only a hash of it.
+
+### Rate limit triggers on the resend endpoint
+
+![429 response after exceeding the resend limit](./evidence/08-rate-limit-resend-429.png)
+
+**What this shows:** After 3 resend attempts, the 4th request returns 429 with
+"Please wait before requesting another code," confirming the resend cooldown is
+enforced server-side, not just disabled in the UI.
+
+### Rate limit triggers on the signin endpoint, with retry indication
+
+![401 then 429 with retry-after header](./evidence/09-rate-limit-signin-429.png)
+
+**What this shows:** Repeated failed signin attempts first return 401
+(invalid credentials, endpoint working correctly), then after 5 attempts
+return 429 with a `retry-after: 885` header, giving the client an exact time
+to wait before retrying — satisfying the Excellent-band requirement for a
+retry indication.
 <!--
 The brief's "Prove it works" items. Screenshots live in /evidence/ and are
-referenced with relative paths so they render on GitHub. Every image needs a
-caption saying what it proves.
+referenced with relative paths so they render on GitHub. 
 -->
 
 ### [Evidence item 1]
