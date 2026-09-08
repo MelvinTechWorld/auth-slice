@@ -3,9 +3,16 @@ import { db } from '@/prisma/db';
 import { signinSchema } from '@/lib/validations/auth';
 import { verifyPassword } from '@/lib/auth/password';
 import { cookies } from 'next/headers';
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
   try {
+    const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+    const rateLimit = await checkRateLimit(ip, 'signin', 5, 900);
+    if (!rateLimit.success) {
+      return rateLimitResponse(rateLimit.reset);
+    }
+
     const body = await request.json();
     const result = signinSchema.safeParse(body);
     

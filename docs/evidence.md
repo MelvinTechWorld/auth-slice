@@ -26,6 +26,8 @@ them in the order the brief lists them so a reviewer can follow along.
 | 05 | `05-verify-success.txt` | Output from curl hitting verify with fresh code. | Verify creates session with strict cookie flags. | 2026-09-06 |
 | 06 | `06-sessions-table.png` | Screenshot of the sessions table showing Alice's new session. | Proves session was stored in DB. | 2026-09-06 |
 | 07 | `07-verify-malformed.txt` | Output from curl hitting verify with malformed code. | Shared Zod schema works on the server. | 2026-09-06 |
+| 08 | `08-ratelimit-resend.txt` | Output from curl hitting resend repeatedly. | Proves rate limit is enforced on resend with 429 status and Retry-After header. | 2026-09-07 |
+| 09 | `09-ratelimit-signin.txt` | Output from curl hitting signin repeatedly. | Proves rate limit is enforced on signin with 429 status and Retry-After header. | 2026-09-07 |
 
 ---
 
@@ -108,6 +110,34 @@ curl -i -X POST http://localhost:3000/api/auth/verify \
 
 # What this proves:
 # Verify endpoint accepts a valid code and correctly sets a secure, HttpOnly, DB-backed session cookie.
+```
+
+---
+
+### Rate Limiting (Resend Endpoint)
+
+```bash
+# Command:
+for i in {1..4}; do curl -i -X POST http://localhost:3000/api/auth/resend -H "Content-Type: application/json" -d '{"email": "alice@example.com"}'; echo ""; done
+
+# Response:
+# HTTP 429 Too Many Requests with Retry-After header and "Please wait before requesting another code."
+
+# What this proves:
+# Resend endpoint correctly enforces the 60-second cooldown limit and provides a Retry-After header.
+```
+
+### Rate Limiting (Signin Endpoint)
+
+```bash
+# Command:
+for i in {1..6}; do curl -i -X POST http://localhost:3000/api/auth/signin -H "Content-Type: application/json" -d '{"email": "alice@example.com", "password": "wrong"}'; echo ""; done
+
+# Response:
+# First 5: HTTP 401 Unauthorized. 6th: HTTP 429 Too Many Requests with Retry-After header and "Too many requests. Please try again later."
+
+# What this proves:
+# Signin endpoint strictly enforces the fixed window rate limit via the database, returning correct status codes and headers.
 ```
 
 ---

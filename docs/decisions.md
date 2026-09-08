@@ -168,3 +168,39 @@ decision is good Section 6 material.
 - **Where it lives:** `app/api/auth/verify/route.ts`
 - **Tunable values set, and why those numbers:** 
 - **Was this choice forced? If so, by what:** 
+
+## Rate limit strategy
+
+- **Date:** 2026-09-07
+- **What it is (my words, 2–3 sentences, as if to someone who has never heard the term):** 
+- **What breaks without it (concrete, name the failure, no "so it's secure"):** 
+- **What I chose:** Fixed window.
+- **What I chose against:** Token bucket or sliding window.
+- **Why (the real reason, including "it was the one I could reason about"):** 
+- **Where it lives:** `lib/rate-limit.ts`
+- **Tunable values set, and why those numbers:** Max requests and window length.
+- **Was this choice forced? If so, by what:** 
+
+## Rate limit store
+
+- **Date:** 2026-09-07
+- **What it is (my words, 2–3 sentences, as if to someone who has never heard the term):** 
+- **What breaks without it (concrete, name the failure, no "so it's secure"):** 
+- **What I chose:** Database (`rate_limits` table).
+- **What I chose against:** In-memory map or Redis.
+- **Why (the real reason, including "it was the one I could reason about"):** 
+- **Where it lives:** `lib/rate-limit.ts`
+- **Tunable values set, and why those numbers:** 
+- **Was this choice forced? If so, by what:** 
+
+## Rate limit response
+
+- **Date:** 2026-09-07
+- **What it is (my words, 2–3 sentences, as if to someone who has never heard the term):** 
+- **What breaks without it (concrete, name the failure, no "so it's secure"):** 
+- **What I chose:** HTTP 429 Too Many Requests with a `Retry-After` header.
+- **What I chose against:** Generic 400/403 or silently dropping requests.
+- **Why (the real reason, including "it was the one I could reason about"):** 
+- **Where it lives:** `app/api/auth/*` routes.
+- **Tunable values set, and why those numbers:** 
+- **Was this choice forced? If so, by what:** 

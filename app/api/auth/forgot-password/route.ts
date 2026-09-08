@@ -2,9 +2,16 @@ import { NextResponse } from 'next/server';
 import { db } from '@/prisma/db';
 import { forgotPasswordSchema } from '@/lib/validations/auth';
 import crypto from 'crypto';
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
   try {
+    const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+    const rateLimit = await checkRateLimit(ip, 'forgot-password', 3, 900);
+    if (!rateLimit.success) {
+      return rateLimitResponse(rateLimit.reset);
+    }
+
     const body = await request.json();
     const result = forgotPasswordSchema.safeParse(body);
     

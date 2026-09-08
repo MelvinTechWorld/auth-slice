@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/prisma/db';
 import { z } from 'zod';
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 const resendSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -8,6 +9,12 @@ const resendSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+    const rateLimit = await checkRateLimit(ip, 'resend', 5, 900);
+    if (!rateLimit.success) {
+      return rateLimitResponse(rateLimit.reset);
+    }
+
     const body = await request.json();
     const result = resendSchema.safeParse(body);
     
@@ -33,10 +40,17 @@ export async function POST(request: Request) {
     if (existingCode) {
       // Check 60 second cooldown
       const lastSentTime = new Date(existingCode.lastSentAt).getTime();
-      if (now - lastSentTime < 60 * 1000) {
+      const timeSinceLastSent = now - lastSentTime;
+      if (timeSinceLastSent < 60 * 1000) {
+        const retryAfterSeconds = Math.max(1, Math.ceil((60 * 1000 - timeSinceLastSent) / 1000));
         return NextResponse.json(
           { error: 'Please wait before requesting another code.' },
-          { status: 429 } // Too many requests
+          { 
+            status: 429,
+            headers: {
+              'Retry-After': retryAfterSeconds.toString(),
+            }
+          }
         );
       }
       // Delete existing code
